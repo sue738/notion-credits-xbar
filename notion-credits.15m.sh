@@ -11,19 +11,52 @@
 #   1) If your personal agent (notion_ai) has a credit limit, the menu bar shows what is left.
 #   2) Otherwise it shows the sum used by the Custom Agents you can edit. Custom Agents spend
 #      their owner's credits by default, so this is close to "what I am spending".
-# Auth: a Notion personal access token, stored in the macOS Keychain (service "notion-pat").
-#   Use "Set token…" in the menu, or: security add-generic-password -a "$USER" -s notion-pat -w
+# Auth: a Notion personal access token, stored in the macOS Keychain.
+#   From the menu: "Set token…"
+#   From Terminal: ./notion-credits.15m.sh set-token
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 TOKEN_PAGE="https://app.notion.com/developers/tokens"
+SERVICE="${NOTION_CREDITS_KEYCHAIN_SERVICE:-notion-pat}"
 
-# Called from the "Set token…" menu item: ask for the token in a dialog and save it
-if [ "$1" = "set-token" ]; then
-  T=$(osascript -e 'text returned of (display dialog "Paste your Notion personal access token:" default answer "" with hidden answer buttons {"Cancel", "Save"} default button "Save" with title "Notion Credits")') || exit 0
-  [ -n "$T" ] && security add-generic-password -U -a "$USER" -s notion-pat -w "$T"
-  exit 0
-fi
+save_token() {
+  case "$1" in
+    ntn_*|secret_*) ;;
+    *) echo "That does not look like a Notion token (it should start with ntn_)." >&2; return 1 ;;
+  esac
+  security add-generic-password -U -a "$USER" -s "$SERVICE" -w "$1" && echo "Saved to Keychain ($SERVICE)."
+}
+
+case "$1" in
+  set-token)
+    if [ -t 0 ]; then
+      # Terminal: hidden prompt
+      printf 'Paste your Notion personal access token: ' >&2
+      read -rs T; echo >&2
+    else
+      # Piped in (echo ntn_... | ./notion-credits.15m.sh set-token), or empty when run from the menu
+      read -r T
+    fi
+    if [ -z "$T" ]; then
+      # Menu: ask in a dialog
+      T=$(osascript -e 'text returned of (display dialog "Paste your Notion personal access token:" default answer "" with hidden answer buttons {"Cancel", "Save"} default button "Save" with title "Notion Credits")') || exit 0
+    fi
+    save_token "$T"
+    exit
+    ;;
+  remove-token)
+    security delete-generic-password -a "$USER" -s "$SERVICE" >/dev/null 2>&1 && echo "Removed from Keychain ($SERVICE)." || echo "No token in Keychain ($SERVICE)."
+    exit 0
+    ;;
+  help|-h|--help)
+    echo "Usage: $(basename "$0") [set-token | remove-token]"
+    echo "  (no argument)  print the xbar menu"
+    echo "  set-token      save your Notion token to the Keychain (prompt, or pipe it in)"
+    echo "  remove-token   delete the saved token"
+    exit 0
+    ;;
+esac
 
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
@@ -32,7 +65,7 @@ token_menu() {
   echo "Set token… | bash=\"$SELF\" param1=set-token terminal=false refresh=true"
 }
 
-TOKEN=$(security find-generic-password -a "$USER" -s notion-pat -w 2>/dev/null)
+TOKEN=$(security find-generic-password -a "$USER" -s "$SERVICE" -w 2>/dev/null)
 if [ -z "$TOKEN" ]; then
   echo "N ?"
   echo "---"
