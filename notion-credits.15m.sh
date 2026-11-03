@@ -11,17 +11,36 @@
 #   1) If your personal agent (notion_ai) has a credit limit, the menu bar shows what is left.
 #   2) Otherwise it shows the sum used by the Custom Agents you can edit. Custom Agents spend
 #      their owner's credits by default, so this is close to "what I am spending".
-# Auth: a Notion personal access token, stored in the macOS Keychain:
-#   security add-generic-password -a "$USER" -s notion-pat -w
+# Auth: a Notion personal access token, stored in the macOS Keychain (service "notion-pat").
+#   Use "Set token…" in the menu, or: security add-generic-password -a "$USER" -s notion-pat -w
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+TOKEN_PAGE="https://app.notion.com/developers/tokens"
+
+# Called from the "Set token…" menu item: ask for the token in a dialog and save it
+if [ "$1" = "set-token" ]; then
+  T=$(osascript -e 'text returned of (display dialog "Paste your Notion personal access token:" default answer "" with hidden answer buttons {"Cancel", "Save"} default button "Save" with title "Notion Credits")') || exit 0
+  [ -n "$T" ] && security add-generic-password -U -a "$USER" -s notion-pat -w "$T"
+  exit 0
+fi
+
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+token_menu() {
+  echo "Create a token in Notion | href=$TOKEN_PAGE"
+  echo "Set token… | bash=\"$SELF\" param1=set-token terminal=false refresh=true"
+}
 
 TOKEN=$(security find-generic-password -a "$USER" -s notion-pat -w 2>/dev/null)
 if [ -z "$TOKEN" ]; then
   echo "N ?"
   echo "---"
-  echo "No notion-pat in Keychain"
-  echo "Run: security add-generic-password -a \$USER -s notion-pat -w"
+  echo "Set up in two steps:"
+  echo "1. Create a personal access token in Notion"
+  echo "2. Click \"Set token…\" and paste it"
+  echo "---"
+  token_menu
   exit 0
 fi
 
@@ -132,3 +151,5 @@ if idle:
     print(f"{idle} agents with no usage this period | color=gray")
 footer()
 EOF
+echo "---"
+token_menu
