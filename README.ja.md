@@ -5,37 +5,33 @@ Notion を開かなくても、Notion AI のクレジットをどれだけ使っ
 [English](README.md)
 
 ```
-N 2,060                                              ← メニューバー
+S▰▰▱▱▱ X▰▱▱▱▱                                  ← menu bar
 ──────────────────────────────────────────────
-You: Notion AI 183 runs this period
-Standard ▱▱▱▱▱▱▱▱▱▱▱▱      0 / 1,500
-Select   ▱▱▱▱▱▱▱▱▱▱▱▱      ? / 500
+Standard ▰▰▰▰▰▱▱▱▱▱▱▱    640 / 1,500
+  Notion AI · 183 runs this period
+Select   ▰▰▱▱▱▱▱▱▱▱▱▱     90 / 500
+  Custom Agents you created · 4 agents
 ──────────────────────────────────────────────
-Custom Agents you can edit: 2,060 used (19 agents)
-▰▰▰▰▱▱▱▱▱▱▱▱   1,043 / 3,000  Ticket triage agent
-▰▱▱▱▱▱▱▱▱▱▱▱     378 / 3,750  Post-mortem manager
-▰▱▱▱▱▱▱▱▱▱▱▱     332 / 7,500  Spec writer
-14 agents with no usage this period
+Other agents you can edit (2,060 used, not your credits)  ▸
 ──────────────────────────────────────────────
 Open Notion · Refresh · Create a token in Notion · Set token…
 ```
 
 表示は英語です。
 
-## 数字の意味
+## バーの見方
 
 Business と Enterprise では、メンバー1人ごとに毎月2種類の枠があります。毎月リセットされ、2つを合わせて使うことはできません。
 
-| 枠 | 使われる機能 |
-| --- | --- |
-| **Standard** 1,500 | Notion エージェント（自動）、AI での編集、AI ブロック、翻訳 |
-| **Select** 500 | モデルを自分で選んだ Notion エージェント、自分が持ち主のカスタムエージェント（既定のとき） |
+| バー | 枠 | 数えるもの |
+| --- | --- | --- |
+| **S** Standard | 1,500 | 自分の Notion AI の利用（Notion エージェント（自動）、AI での編集、AI ブロック、翻訳） |
+| **X** Select | 500 | 自分が作ったカスタムエージェント。特に設定しなければ、持ち主の Select を使います |
 
-- **メニューバー:** 1人あたりの上限がワークスペースで決まっていれば、今月の**残り**を出します。決まっていなければ、自分が編集できるカスタムエージェントの今月の**使用量**の合計です。
-- **You:** 自分の使用量をバーで出します。API は Standard と Select を分けずに合計だけを返すので、Standard の枠に対して描いています。
-- **Custom Agents:** エージェントごとに、そのエージェントの上限に対する使用量です。残りが30%を切ると**橙**、10%を切ると**赤**になります。
-
-プランによって枠の量が違うときは、ファイルの先頭にある `NOTION_STANDARD_CREDITS` と `NOTION_SELECT_CREDITS` を書き換えてください。
+- どちらかのバーの残りが30%を切るとメニューバーが**橙**に、10%を切ると**赤**になります。
+- Notion API は、自分の Notion AI の利用を合計1つで返します。Standard と Select に分かれていないので、モデルを自分で選んだ利用（本来は Select）もここでは Standard に入ります。
+- 他の人が持ち主のエージェントは、持ち主のクレジットを使います。自分の枠には入らないので、「Other agents you can edit」に参考として並べています。
+- プランによって枠の量が違うときは、ファイルの先頭近くにある `NOTION_STANDARD_CREDITS` と `NOTION_SELECT_CREDITS` を書き換えてください。
 
 ## 入れ方（5分ほど）
 

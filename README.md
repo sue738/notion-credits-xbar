@@ -5,36 +5,34 @@ See how many Notion AI credits you are using, without opening Notion.
 [日本語の説明はこちら](README.ja.md)
 
 ```
-N 2,060                                              ← menu bar
+S▰▰▱▱▱ X▰▱▱▱▱                                  ← menu bar
 ──────────────────────────────────────────────
-You: Notion AI 183 runs this period
-Standard ▱▱▱▱▱▱▱▱▱▱▱▱      0 / 1,500
-Select   ▱▱▱▱▱▱▱▱▱▱▱▱      ? / 500
+Standard ▰▰▰▰▰▱▱▱▱▱▱▱    640 / 1,500
+  Notion AI · 183 runs this period
+Select   ▰▰▱▱▱▱▱▱▱▱▱▱     90 / 500
+  Custom Agents you created · 4 agents
 ──────────────────────────────────────────────
-Custom Agents you can edit: 2,060 used (19 agents)
-▰▰▰▰▱▱▱▱▱▱▱▱   1,043 / 3,000  Ticket triage agent
-▰▱▱▱▱▱▱▱▱▱▱▱     378 / 3,750  Post-mortem manager
-▰▱▱▱▱▱▱▱▱▱▱▱     332 / 7,500  Spec writer
-14 agents with no usage this period
+Other agents you can edit (2,060 used, not your credits)  ▸
 ──────────────────────────────────────────────
 Open Notion · Refresh · Create a token in Notion · Set token…
 ```
 
-## What the numbers mean
+## What the bars mean
 
 Each member of a Business or Enterprise workspace gets two separate monthly allowances.
 They reset every month and cannot be combined.
 
-| Allowance | Used by |
-| --- | --- |
-| **Standard** 1,500 | Notion Agent on Auto, AI editing, AI blocks, translation |
-| **Select** 500 | Notion Agent with a model you pick, and Custom Agents you own (by default) |
+| Bar | Allowance | What counts |
+| --- | --- | --- |
+| **S** Standard | 1,500 | Your own Notion AI use (Notion Agent on Auto, AI editing, AI blocks, translation) |
+| **X** Select | 500 | Custom Agents you created. By default they spend their owner's Select credits |
 
-- **Menu bar:** if your workspace sets a per-member limit, credits **left**. Otherwise, credits **used** this month by the Custom Agents you can edit.
-- **You:** your personal usage as a bar. The API reports one total without splitting Standard and Select, so it is drawn against Standard.
-- **Custom Agents:** each agent's usage against its own limit. A bar turns **orange** below 30% left and **red** below 10%.
-
-If your plan has different amounts, set `NOTION_STANDARD_CREDITS` / `NOTION_SELECT_CREDITS` at the top of the file.
+- The menu bar turns **orange** when either bar has less than 30% left, and **red** below 10%.
+- The Notion API reports your Notion AI use as one total. It does not split Standard and Select,
+  so picking a model yourself (which uses Select) is still counted under Standard here.
+- Agents other people own spend their owner's credits, not yours. They are listed under
+  "Other agents you can edit" for reference.
+- If your plan has different amounts, change `NOTION_STANDARD_CREDITS` / `NOTION_SELECT_CREDITS` near the top of the file.
 
 ## Install (5 minutes)
 

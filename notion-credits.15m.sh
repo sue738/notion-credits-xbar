@@ -1,16 +1,15 @@
 #!/bin/bash
 # <xbar.title>Notion Credits</xbar.title>
-# <xbar.version>v1.0</xbar.version>
+# <xbar.version>v1.1</xbar.version>
 # <xbar.author>sue738</xbar.author>
 # <xbar.author.github>sue738</xbar.author.github>
-# <xbar.desc>Shows Notion AI credits used this billing period by the Custom Agents you can edit, plus your personal allowance when the workspace sets one.</xbar.desc>
+# <xbar.desc>Shows your own Notion AI credits as two bars: Standard (1,500/month) and Select (500/month).</xbar.desc>
 # <xbar.dependencies>python3</xbar.dependencies>
 # <xbar.abouturl>https://github.com/sue738/notion-credits-xbar</xbar.abouturl>
 #
 # Data: GET /v1/agents/{id}/insights (Notion API, public beta).
-#   1) If your personal agent (notion_ai) has a credit limit, the menu bar shows what is left.
-#   2) Otherwise it shows the sum used by the Custom Agents you can edit. Custom Agents spend
-#      their owner's credits by default, so this is close to "what I am spending".
+#   Standard = your personal Notion AI (agent "notion_ai").
+#   Select   = Custom Agents you created (they spend their owner's Select credits by default).
 # Auth: a Notion personal access token, stored in the macOS Keychain.
 #   From the menu: "Set token…"
 #   From Terminal: ./notion-credits.15m.sh set-token
@@ -19,6 +18,10 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 TOKEN_PAGE="https://app.notion.com/developers/tokens"
 SERVICE="${NOTION_CREDITS_KEYCHAIN_SERVICE:-notion-pat}"
+
+# Monthly allowance per member. Change these if your plan differs.
+export NOTION_STANDARD_CREDITS="${NOTION_STANDARD_CREDITS:-1500}"
+export NOTION_SELECT_CREDITS="${NOTION_SELECT_CREDITS:-500}"
 
 save_token() {
   case "$1" in
@@ -85,6 +88,9 @@ HEADERS = {
     "Authorization": "Bearer " + os.environ["NOTION_TOKEN"],
     "Notion-Version": "2026-03-11",
 }
+STANDARD = int(os.environ["NOTION_STANDARD_CREDITS"])
+SELECT = int(os.environ["NOTION_SELECT_CREDITS"])
+MONO = "font=Menlo size=12"
 
 def get(path):
     req = urllib.request.Request(API + path, headers=HEADERS)
@@ -102,18 +108,16 @@ def get(path):
 def fmt(n):
     return f"{n:,.0f}"
 
-def color_for(left, limit):
-    ratio = left / limit
-    return "red" if ratio < 0.1 else "orange" if ratio < 0.3 else ""
-
-# Monthly allowance per member (Business/Enterprise). Standard and Select are separate pools.
-STANDARD = int(os.environ.get("NOTION_STANDARD_CREDITS", "1500"))
-SELECT = int(os.environ.get("NOTION_SELECT_CREDITS", "500"))
-MONO = "font=Menlo size=12"
-
-def bar(used, cap, width=12):
+def bar(used, cap, width):
     filled = round(min(used / cap, 1) * width) if cap else 0
     return "▰" * filled + "▱" * (width - filled)
+
+def color_for(used, cap):
+    left = max(cap - used, 0) / cap if cap else 1
+    return "red" if left < 0.1 else "orange" if left < 0.3 else ""
+
+def with_color(line, c, extra=MONO):
+    return f"{line} | {extra}" + (f" color={c}" if c else "")
 
 def footer():
     print("---")
@@ -127,32 +131,21 @@ def fail(label, code, d):
     footer()
     raise SystemExit
 
-# 1) Personal allowance
+# Standard: your personal Notion AI
 code, d = get("/agents/notion_ai/insights")
-personal = None
-if code == 200:
-    used = d.get("total_credits_used") or 0
-    limit = d.get("credit_limit")
-    if isinstance(limit, (int, float)) and limit > 0:
-        left = max(limit - used, 0)
-        c = color_for(left, limit)
-        print(f"N {fmt(left)}" + (f" | color={c}" if c else ""))
-        print("---")
-        print(f"Left {fmt(left)} / limit {fmt(limit)} ({left / limit:.0%})")
-        print(f"{bar(used, limit)}  {fmt(used)} / {fmt(limit)} | {MONO}" + (f" color={c}" if c else ""))
-        footer()
-        raise SystemExit
-    personal = (used, d.get("runs_completed", 0))
-elif code == 403 and d.get("code") == "workspace_credits_exhausted":
+if code == 403 and d.get("code") == "workspace_credits_exhausted":
     print("N 0 | color=red")
     print("---")
     print("Workspace credits are exhausted")
     footer()
     raise SystemExit
-elif code != 404:
-    fail("Personal agent:", code, d)
+if code != 200:
+    fail("Personal Notion AI:", code, d)
+me = (d.get("created_by") or {}).get("id")
+std_used = d.get("total_credits_used") or 0
+std_runs = d.get("runs_completed") or 0
 
-# 2) Custom Agents you can edit (view-only ones return 403 and are skipped)
+# Select: Custom Agents you created. Others' agents spend their owner's credits, not yours.
 agents, cursor = [], None
 while True:
     code, d = get("/agents?page_size=100" + (f"&start_cursor={cursor}" if cursor else ""))
@@ -163,43 +156,43 @@ while True:
         break
     cursor = d.get("next_cursor")
 
-rows, total = [], 0
+mine, others = [], []
 for a in agents:
     code, d = get(f"/agents/{a['id']}/insights")
     if code != 200:
-        continue
-    used = d.get("total_credits_used") or 0
-    total += used
-    rows.append((used, a.get("name", "?"), d.get("credit_limit"), d.get("pause_reason")))
+        continue  # view-only agents return 403
+    row = (d.get("total_credits_used") or 0, a.get("name", "?").replace("|", "/"), d.get("credit_limit"), d.get("pause_reason"))
+    (mine if (d.get("created_by") or {}).get("id") == me else others).append(row)
+sel_used = sum(r[0] for r in mine)
 
-print(f"N {fmt(total)}")
+# Menu bar: two bars, colored by whichever is closer to running out
+c = color_for(std_used, STANDARD) or color_for(sel_used, SELECT)
+print(with_color(f"S{bar(std_used, STANDARD, 5)} X{bar(sel_used, SELECT, 5)}", c, "font=Menlo size=11"))
 print("---")
-if personal:
-    used, runs = personal
-    print(f"You: Notion AI {runs} runs this period")
-    print(f"Standard {bar(used, STANDARD)}  {fmt(used)} / {fmt(STANDARD)} | {MONO}")
-    print(f"Select   {bar(0, SELECT)}  ? / {fmt(SELECT)} | {MONO} color=gray")
-    print("The API reports one total, counted against Standard here | color=gray size=11")
-else:
-    print("Personal usage not available via the API | color=gray")
-print("---")
-print(f"Custom Agents you can edit: {fmt(total)} used ({len(rows)} agents)")
-for used, name, limit, pause in sorted(rows, key=lambda r: -r[0]):
-    if not used:
-        continue
-    name = name.replace("|", "/")
-    if isinstance(limit, (int, float)) and limit > 0:
-        c = color_for(max(limit - used, 0), limit)
-        line = f"{bar(used, limit)}  {fmt(used):>6} / {fmt(limit):<6} {name}"
-    else:
-        c = ""
-        line = f"{'':12}  {fmt(used):>6}          {name}"
-    if pause:
-        line += f" ({pause})"
-    print(f"{line} | {MONO}" + (f" color={c}" if c else ""))
-idle = sum(1 for r in rows if not r[0])
-if idle:
-    print(f"{idle} agents with no usage this period | color=gray")
+print(with_color(f"Standard {bar(std_used, STANDARD, 12)} {fmt(std_used):>6} / {fmt(STANDARD)}", color_for(std_used, STANDARD)))
+print(f"  Notion AI · {std_runs} runs this period | color=gray size=11")
+print(with_color(f"Select   {bar(sel_used, SELECT, 12)} {fmt(sel_used):>6} / {fmt(SELECT)}", color_for(sel_used, SELECT)))
+print(f"  Custom Agents you created · {len(mine)} agents | color=gray size=11")
+for used, name, limit, pause in sorted(mine, key=lambda r: -r[0]):
+    if used:
+        print(f"--{name}  {fmt(used)}" + (f" ({pause})" if pause else ""))
+print("The API gives one total for Notion AI, so it is shown as Standard | color=gray size=11")
+
+# Agents others own but you can edit: not your credits, shown for reference
+active = [r for r in others if r[0]]
+if active:
+    print("---")
+    print(f"Other agents you can edit ({fmt(sum(r[0] for r in others))} used, not your credits) | color=gray")
+    for used, name, limit, pause in sorted(active, key=lambda r: -r[0]):
+        if isinstance(limit, (int, float)) and limit > 0:
+            line = f"{bar(used, limit, 12)} {fmt(used):>6} / {fmt(limit):<6} {name}"
+            c = color_for(used, limit)
+        else:
+            line = f"{'':12} {fmt(used):>6}          {name}"
+            c = ""
+        if pause:
+            line += f" ({pause})"
+        print("--" + with_color(line, c))
 footer()
 EOF
 echo "---"
