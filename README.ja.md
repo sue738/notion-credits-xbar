@@ -71,6 +71,29 @@ chmod +x "$PLUGINS/notion-credits.15m.sh"
 | `notion-credits.15m.sh remove-token` | 保存したトークンを消します |
 | `notion-credits.15m.sh` | メニューの中身を1回だけ表示します（動くかの確認に使えます） |
 
+## チームの使用量と Slack への通知（Enterprise・任意）
+
+Enterprise プランの組織オーナーは、メンバー全員の使用量をメニューに出して、Slack に送ることもできます。
+管理者用の API を使うので、Standard の正確な数字とリセット日も取れるようになります。
+
+1. [組織コンソール](https://www.notion.com/help/organization-level-controls)で、`user:read` の権限を付けた**組織用のボットのトークン**を作ります。
+2. 保存します: `notion-credits.15m.sh set-admin-token`
+3. ファイルの先頭近くにある `NOTION_SPACE_ID` にワークスペースの ID を入れます。
+
+メニューに **Team usage** が出ます。上限に近い人から順に並び、月の進みより速く使っている人は赤になります。
+
+Slack に送るときは、送り先のチャンネルに[着信 Webhook](https://api.slack.com/messaging/webhooks) を作ってから:
+
+```sh
+notion-credits.15m.sh set-slack-webhook
+notion-credits.15m.sh team-report      # すぐ送る。Team usage のメニューからも送れます
+```
+
+毎週月曜 9:00 に送るなら、`notion-credits.15m.sh team-report` を動かす LaunchAgent を作ります
+（launchd はシェルの設定を読まないので、`NOTION_SPACE_ID` は先にファイルに書いておきます）。
+
+組織用のトークンは全メンバーの使用量を読めます。管理コンソールをもともと見ている人だけで扱ってください。
+
 ## よくある質問
 
 **トークンは安全？**

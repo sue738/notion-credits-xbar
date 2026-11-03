@@ -70,6 +70,29 @@ chmod +x "$PLUGINS/notion-credits.15m.sh"
 | `notion-credits.15m.sh remove-token` | Delete the saved token |
 | `notion-credits.15m.sh` | Print the menu once (handy for checking it works) |
 
+## Team usage and Slack report (Enterprise, optional)
+
+Organization owners on the Enterprise plan can see everyone's usage in the menu and post it to Slack.
+This uses the Admin API, which also gives the exact Standard number and reset date.
+
+1. In the [organization console](https://www.notion.com/help/organization-level-controls), create an **organization bot token** with the `user:read` scope.
+2. Save it: `notion-credits.15m.sh set-admin-token`
+3. Put your workspace ID in `NOTION_SPACE_ID` near the top of the file.
+
+A **Team usage** submenu appears, sorted by who is closest to their limits. Red means ahead of the month's pace.
+
+To post to Slack, create an [incoming webhook](https://api.slack.com/messaging/webhooks) for the channel, then:
+
+```sh
+notion-credits.15m.sh set-slack-webhook
+notion-credits.15m.sh team-report      # posts now; also in the Team usage submenu
+```
+
+To post every Monday at 9:00, add a LaunchAgent that runs `notion-credits.15m.sh team-report`
+(set `NOTION_SPACE_ID` in the file first, since launchd does not read your shell settings).
+
+The organization token can read every member's usage. Keep it to the people who already see the admin console.
+
 ## Questions
 
 **Is my token safe?**
