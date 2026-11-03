@@ -4,19 +4,9 @@ See how many Notion AI credits you are using, without opening Notion.
 
 [日本語の説明はこちら](README.ja.md)
 
-```
-S▰▰▱▱▱ X▰▱▱▱▱                                  ← menu bar
-──────────────────────────────────────────────
-Standard  43% ▰▰▰▰▰▰│▱▱▱▱▱▱▱    640 / 1,500
-  Notion AI · 183 runs this period
-Select    18% ▰▰▱▱▱▱│▱▱▱▱▱▱▱     90 / 500
-  Custom Agents you created · 4 agents
-Resets around Nov 17 (in 14 days) · │ = time elapsed
-──────────────────────────────────────────────
-Other agents you can edit (2,060 used, not your credits)  ▸
-──────────────────────────────────────────────
-Open Notion · Refresh · Create a token in Notion · Set token…
-```
+![Menu bar and menu](docs/menubar.png)
+
+The bar is credits used and the white line is how far into the month you are. Green means you are on pace, red means you are using credits faster than the month is passing.
 
 ## What the bars mean
 
@@ -28,12 +18,10 @@ They reset every month and cannot be combined.
 | **S** Standard | 1,500 | Your own Notion AI use (Notion Agent on Auto, AI editing, AI blocks, translation) |
 | **X** Select | 500 | Custom Agents you created. By default they spend their owner's Select credits |
 
-- The menu bar turns **orange** when either bar has less than 30% left, and **red** below 10%.
 - The Notion API reports your Notion AI use as one total. It does not split Standard and Select,
   so picking a model yourself (which uses Select) is still counted under Standard here.
 - Agents other people own spend their owner's credits, not yours. They are listed under
   "Other agents you can edit" for reference.
-- **│** marks how far into the month you are, like a clock. If the filled part is ahead of it, you are using credits faster than the month is passing.
 - The reset date is estimated from your usage history, because the API does not return it. For the exact date, check Settings → Notion AI → Usage and set `NOTION_RESET_DAY` near the top of the file.
 - If your plan has different amounts, change `NOTION_STANDARD_CREDITS` / `NOTION_SELECT_CREDITS` near the top of the file.
 

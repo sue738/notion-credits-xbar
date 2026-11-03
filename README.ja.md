@@ -4,19 +4,9 @@ Notion を開かなくても、Notion AI のクレジットをどれだけ使っ
 
 [English](README.md)
 
-```
-S▰▰▱▱▱ X▰▱▱▱▱                                  ← menu bar
-──────────────────────────────────────────────
-Standard  43% ▰▰▰▰▰▰│▱▱▱▱▱▱▱    640 / 1,500
-  Notion AI · 183 runs this period
-Select    18% ▰▰▱▱▱▱│▱▱▱▱▱▱▱     90 / 500
-  Custom Agents you created · 4 agents
-Resets around Nov 17 (in 14 days) · │ = time elapsed
-──────────────────────────────────────────────
-Other agents you can edit (2,060 used, not your credits)  ▸
-──────────────────────────────────────────────
-Open Notion · Refresh · Create a token in Notion · Set token…
-```
+![メニューバーとメニュー](docs/menubar.png)
+
+バーは使ったクレジット、白い縦線は今月どこまで進んだかです。緑なら月の進みと同じかそれより遅いペース、赤なら月の進みより速く使っています。
 
 表示は英語です。
 
@@ -29,10 +19,8 @@ Business と Enterprise では、メンバー1人ごとに毎月2種類の枠が
 | **S** Standard | 1,500 | 自分の Notion AI の利用（Notion エージェント（自動）、AI での編集、AI ブロック、翻訳） |
 | **X** Select | 500 | 自分が作ったカスタムエージェント。特に設定しなければ、持ち主の Select を使います |
 
-- どちらかのバーの残りが30%を切るとメニューバーが**橙**に、10%を切ると**赤**になります。
 - Notion API は、自分の Notion AI の利用を合計1つで返します。Standard と Select に分かれていないので、モデルを自分で選んだ利用（本来は Select）もここでは Standard に入ります。
 - 他の人が持ち主のエージェントは、持ち主のクレジットを使います。自分の枠には入らないので、「Other agents you can edit」に参考として並べています。
-- **│** は今月がどこまで進んだかを示す印です。塗られた部分がこの印より先に出ていれば、月の進みより速くクレジットを使っています。
 - リセット日は API が返さないので、利用の記録から割り出した目安です。正確な日は Notion の 設定 → Notion AI → 使用状況 で確かめて、ファイルの先頭近くにある `NOTION_RESET_DAY` に日にちを入れてください。
 - プランによって枠の量が違うときは、ファイルの先頭近くにある `NOTION_STANDARD_CREDITS` と `NOTION_SELECT_CREDITS` を書き換えてください。
 

@@ -10,6 +10,7 @@ instead of opening a public issue. You will get a reply within a week.
 - Reads your token from the macOS Keychain (item `notion-pat`). It is never written to a file.
 - Sends requests only to `https://api.notion.com`, and only `GET` requests to the agent insights endpoints.
 - Writes one cache file, `~/Library/Caches/notion-credits-xbar.json`, holding the estimated billing period dates.
+- Draws the bar images with the `osascript` that ships with macOS. Nothing is downloaded or installed.
 - Text from the API (agent names, error codes) is cleaned before it is shown,
   so it cannot add menu actions such as `bash=` or `href=`.
 

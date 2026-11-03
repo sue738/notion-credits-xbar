@@ -1,6 +1,6 @@
 #!/bin/bash
 # <xbar.title>Notion Credits</xbar.title>
-# <xbar.version>v1.1</xbar.version>
+# <xbar.version>v1.2</xbar.version>
 # <xbar.author>sue738</xbar.author>
 # <xbar.author.github>sue738</xbar.author.github>
 # <xbar.desc>Shows your own Notion AI credits as two bars: Standard (1,500/month) and Select (500/month).</xbar.desc>
@@ -215,6 +215,121 @@ def fail(label, code, d):
     footer()
     raise SystemExit
 
+RENDER_JS = r"""
+ObjC.import("AppKit");
+ObjC.import("Foundation");
+
+// Draws AgentWatch-style quota images. Input: JSON {bars: [{label, used, elapsed, known}], rows: [...]}
+// Output: JSON {title: base64png, rows: [base64png...]}
+function run(argv) {
+  var spec = JSON.parse(argv[0]);
+  var RED = $.NSColor.colorWithSRGBRedGreenBlueAlpha(0.82, 0.23, 0.25, 1);
+  var GREEN = $.NSColor.colorWithSRGBRedGreenBlueAlpha(0.20, 0.62, 0.40, 1);
+
+  function font(size, weight) {
+    var f = $.NSFont.systemFontOfSizeWeight(size, weight);
+    var d = f.fontDescriptor.fontDescriptorWithDesign($.NSFontDescriptorSystemDesignRounded);
+    return d.isNil() ? f : $.NSFont.fontWithDescriptorSize(d, size);
+  }
+  function attrs(f, color, shadow) {
+    var a = $.NSMutableDictionary.dictionary;
+    a.setObjectForKey(f, $.NSFontAttributeName);
+    a.setObjectForKey(color, $.NSForegroundColorAttributeName);
+    if (shadow) {
+      var s = $.NSShadow.alloc.init;
+      s.setShadowColor($.NSColor.colorWithSRGBRedGreenBlueAlpha(0, 0, 0, 0.55));
+      s.setShadowBlurRadius(0.7);
+      s.setShadowOffset($.NSMakeSize(0, 0));
+      a.setObjectForKey(s, $.NSShadowAttributeName);
+    }
+    return a;
+  }
+  function str(text) { return $.NSString.alloc.initWithUTF8String(text); }
+  function width(text, a) { return str(text).sizeWithAttributes(a).width; }
+  function draw(text, x, y, a) { str(text).drawAtPointWithAttributes($.NSMakePoint(x, y), a); }
+  function capsule(x, y, w, h, color) {
+    if (w <= 0) return;
+    color.setFill;
+    $.NSBezierPath.bezierPathWithRoundedRectXRadiusYRadius($.NSMakeRect(x, y, w, h), h / 2, h / 2).fill;
+  }
+  function rect(x, y, w, h, color) { color.setFill; $.NSRectFill($.NSMakeRect(x, y, w, h)); }
+  function pct(b) { return b.known ? Math.round(b.used * 100) + "%" : "—"; }
+  function color(b) { return b.used > b.elapsed ? RED : GREEN; }
+
+  // Render at 2x into a bitmap whose point size is w x h, so the PNG carries 144 dpi
+  function image(w, h, paint) {
+    var rep = $.NSBitmapImageRep.alloc.initWithBitmapDataPlanesPixelsWidePixelsHighBitsPerSampleSamplesPerPixelHasAlphaIsPlanarColorSpaceNameBytesPerRowBitsPerPixel(
+      null, Math.ceil(w * 2), Math.ceil(h * 2), 8, 4, true, false, $.NSCalibratedRGBColorSpace, 0, 0);
+    rep.setSize($.NSMakeSize(w, h));
+    $.NSGraphicsContext.saveGraphicsState;
+    $.NSGraphicsContext.setCurrentContext($.NSGraphicsContext.graphicsContextWithBitmapImageRep(rep));
+    paint();
+    $.NSGraphicsContext.restoreGraphicsState;
+    var png = rep.representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $.NSDictionary.dictionary);
+    return ObjC.unwrap(png.base64EncodedStringWithOptions(0));
+  }
+
+  var white = $.NSColor.whiteColor;
+  var track = $.NSColor.colorWithSRGBRedGreenBlueAlpha(1, 1, 1, 0.27);
+
+  // Menu bar: stacked NOTION/AI, then one block per allowance (label + big %, thin bar + time tick)
+  var brandA = attrs(font(7, $.NSFontWeightHeavy), white, true);
+  var titleA = attrs(font(9, $.NSFontWeightSemibold), white, true);
+  var bigA = attrs(font(13, $.NSFontWeightBold), white, true);
+  var brandW = Math.max(width("NOTION", brandA), width("AI", brandA));
+  var BAR = 32, GAP = 3, H = 22;
+  var blocks = spec.bars.map(function (b) {
+    return Math.max(BAR, width(b.label, titleA) + 2 + width(pct(b), bigA));
+  });
+  var W = brandW + blocks.reduce(function (s, w) { return s + GAP + w; }, 0) + 1;
+  var title = image(W, H, function () {
+    draw("NOTION", (brandW - width("NOTION", brandA)) / 2, 12, brandA);
+    draw("AI", (brandW - width("AI", brandA)) / 2, 3, brandA);
+    var x = brandW + GAP;
+    spec.bars.forEach(function (b, i) {
+      draw(b.label, x, 6.5, titleA);
+      draw(pct(b), x + width(b.label, titleA) + 2, 4, bigA);
+      capsule(x, 2, BAR, 2, track);
+      if (b.known) {
+        capsule(x, 2, BAR * Math.min(b.used, 1), 2, color(b));
+        rect(x + Math.min(BAR - 1.5, Math.max(0, BAR * b.elapsed - 0.75)), 0, 1.5, 6, white);
+      }
+      x += blocks[i] + GAP;
+    });
+  });
+
+  // Dropdown rows: label | % | wide bar with a time tick, like AgentWatch's 利用枠 card
+  var label = $.NSColor.labelColor;
+  var rowLabelA = attrs(font(11, $.NSFontWeightMedium), label, false);
+  var rowPctA = attrs(font(12, $.NSFontWeightBold), label, false);
+  var rows = spec.rows.map(function (r) {
+    return image(200, 16, function () {
+      draw(r.label, 0, 1, rowLabelA);
+      var p = pct(r);
+      draw(p, 92 - width(p, rowPctA), 0, rowPctA);
+      var bx = 98, bw = 200 - bx - 2;
+      capsule(bx, 5.5, bw, 5, $.NSColor.labelColor.colorWithAlphaComponent(0.12));
+      if (r.known) {
+        capsule(bx, 5.5, bw * Math.min(r.used, 1), 5, color(r));
+        rect(bx + Math.min(bw - 1.5, Math.max(0, bw * r.elapsed - 0.75)), 3, 1.5, 10, label.colorWithAlphaComponent(0.75));
+      }
+    });
+  });
+  return JSON.stringify({ title: title, rows: rows });
+}
+"""
+
+def render(spec):
+    # Draw the AgentWatch-style images with AppKit through JavaScript for Automation (built into macOS)
+    import subprocess
+    try:
+        out = subprocess.run(["osascript", "-l", "JavaScript", "-e", RENDER_JS, json.dumps(spec)],
+                             capture_output=True, text=True, timeout=15)
+        data = json.loads(out.stdout)
+        return data if data.get("title") else None
+    except Exception:
+        return None
+
 # Standard: your personal Notion AI
 code, d = get("/agents/notion_ai/insights")
 if code == 403 and d.get("code") == "workspace_credits_exhausted":
@@ -261,39 +376,56 @@ elapsed = None
 if period:
     start, reset, exact = period
     elapsed = min(max((time.time() - start) / (reset - start), 0), 1)
-c = color_for(std_used, STANDARD) or color_for(sel_used, SELECT)
-print(with_color(f"S{bar(std_used, STANDARD, 5)} X{bar(sel_used, SELECT, 5)}", c, "font=Menlo size=11"))
+
+def gauge(label, used, cap):
+    return {"label": label, "used": used / cap if cap else 0, "elapsed": elapsed if elapsed is not None else 1, "known": bool(cap)}
+
+images = render({
+    "bars": [gauge("Std", std_used, STANDARD), gauge("Sel", sel_used, SELECT)],
+    "rows": [gauge("Standard", std_used, STANDARD), gauge("Select", sel_used, SELECT)],
+})
+
+# Menu bar, drawn like AgentWatch: bar = credits used, white tick = time elapsed, red = using faster than time
+if images:
+    print(f"| image={images['title']}")
+else:
+    c = color_for(std_used, STANDARD) or color_for(sel_used, SELECT)
+    print(with_color(f"S{bar(std_used, STANDARD, 5)} X{bar(sel_used, SELECT, 5)}", c, "font=Menlo size=11"))
 print("---")
-print(with_color(f"Standard {pct(std_used, STANDARD):>4} {bar(std_used, STANDARD, 14, elapsed)} {fmt(std_used):>6} / {fmt(STANDARD)}", color_for(std_used, STANDARD)))
-print(f"  Notion AI · {fmt(std_runs)} runs this period | color=gray size=11")
-print(with_color(f"Select   {pct(sel_used, SELECT):>4} {bar(sel_used, SELECT, 14, elapsed)} {fmt(sel_used):>6} / {fmt(SELECT)}", color_for(sel_used, SELECT)))
-print(f"  Custom Agents you created · {len(mine)} agents | color=gray size=11")
+for i, (used, cap, note) in enumerate((
+    (std_used, STANDARD, f"Notion AI · {fmt(std_runs)} runs"),
+    (sel_used, SELECT, f"{len(mine)} Custom Agents you created"),
+)):
+    if images:
+        print(f"| image={images['rows'][i]}")
+    else:
+        print(with_color(f"{('Standard', 'Select')[i]:<8} {pct(used, cap):>4} {bar(used, cap, 14, elapsed)}", color_for(used, cap)))
+    print(f"{fmt(used)} / {fmt(cap)} used · {note} | color=gray size=11")
 for used, name, limit, pause in sorted(mine, key=lambda r: -r[0]):
     if used:
         print(f"--{name}  {fmt(used)}" + (f" ({pause})" if pause else ""))
 if period:
     days = max((reset - time.time()) / 86400, 0)
     when = datetime.fromtimestamp(reset).strftime("%b %-d")
-    print(f"Resets {'on' if exact else 'around'} {when} (in {days:.0f} days) · │ = time elapsed | color=gray size=11")
+    print(f"Resets {'on' if exact else 'around'} {when} · in {days:.0f} days | size=11")
 else:
-    print("Reset date unknown yet (needs some Notion AI use) | color=gray size=11")
-print("The API gives one total for Notion AI, so it is shown as Standard | color=gray size=11")
+    print("Reset date not known yet | color=gray size=11")
+
+print("---")
+print("About these numbers | color=gray size=11")
+print("--Bar = credits used · white line = time elapsed")
+print("--Red = using credits faster than the month is passing")
+print("--The API gives one total for Notion AI, shown as Standard")
+if not (period and exact):
+    print("--Reset date is estimated. Set NOTION_RESET_DAY for the exact day")
 
 # Agents others own but you can edit: not your credits, shown for reference
 active = [r for r in others if r[0]]
 if active:
-    print("---")
-    print(f"Other agents you can edit ({fmt(sum(r[0] for r in others))} used, not your credits) | color=gray")
+    print(f"Other agents you can edit (not your credits) | color=gray size=11")
     for used, name, limit, pause in sorted(active, key=lambda r: -r[0]):
-        if isinstance(limit, (int, float)) and limit > 0:
-            line = f"{bar(used, limit, 12)} {fmt(used):>6} / {fmt(limit):<6} {name}"
-            c = color_for(used, limit)
-        else:
-            line = f"{'':12} {fmt(used):>6}          {name}"
-            c = ""
-        if pause:
-            line += f" ({pause})"
-        print("--" + with_color(line, c))
+        cap = f" / {fmt(limit)}" if isinstance(limit, (int, float)) and limit > 0 else ""
+        print(f"--{name}  {fmt(used)}{cap}" + (f" ({pause})" if pause else ""))
 footer()
 EOF
 echo "---"
