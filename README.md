@@ -7,10 +7,11 @@ See how many Notion AI credits you are using, without opening Notion.
 ```
 S▰▰▱▱▱ X▰▱▱▱▱                                  ← menu bar
 ──────────────────────────────────────────────
-Standard ▰▰▰▰▰▱▱▱▱▱▱▱    640 / 1,500
+Standard  43% ▰▰▰▰▰▰│▱▱▱▱▱▱▱    640 / 1,500
   Notion AI · 183 runs this period
-Select   ▰▰▱▱▱▱▱▱▱▱▱▱     90 / 500
+Select    18% ▰▰▱▱▱▱│▱▱▱▱▱▱▱     90 / 500
   Custom Agents you created · 4 agents
+Resets around Nov 17 (in 14 days) · │ = time elapsed
 ──────────────────────────────────────────────
 Other agents you can edit (2,060 used, not your credits)  ▸
 ──────────────────────────────────────────────
@@ -32,6 +33,8 @@ They reset every month and cannot be combined.
   so picking a model yourself (which uses Select) is still counted under Standard here.
 - Agents other people own spend their owner's credits, not yours. They are listed under
   "Other agents you can edit" for reference.
+- **│** marks how far into the month you are, like a clock. If the filled part is ahead of it, you are using credits faster than the month is passing.
+- The reset date is estimated from your usage history, because the API does not return it. For the exact date, check Settings → Notion AI → Usage and set `NOTION_RESET_DAY` near the top of the file.
 - If your plan has different amounts, change `NOTION_STANDARD_CREDITS` / `NOTION_SELECT_CREDITS` near the top of the file.
 
 ## Install (5 minutes)
@@ -40,7 +43,7 @@ You need a Mac and a Notion Business or Enterprise workspace.
 
 1. **Install xbar.** Download it from [xbarapp.com](https://xbarapp.com) and open it.
    Or, with Homebrew: `brew install --cask xbar`
-2. **Add the plugin.** Download [`notion-credits.15m.sh`](https://raw.githubusercontent.com/sue738/notion-credits-xbar/main/notion-credits.15m.sh)
+2. **Add the plugin.** Download [`notion-credits.15m.sh`](https://github.com/sue738/notion-credits-xbar/releases/latest/download/notion-credits.15m.sh)
    (right-click → Save Link As…).
    In the xbar menu choose **Open plugin folder** and move the file there. Then choose **Refresh all**.
    **N ?** appears in the menu bar.
@@ -64,7 +67,7 @@ brew install --cask xbar
 open -a xbar
 PLUGINS=~/Library/Application\ Support/xbar/plugins
 mkdir -p "$PLUGINS"
-curl -fsSL https://raw.githubusercontent.com/sue738/notion-credits-xbar/main/notion-credits.15m.sh -o "$PLUGINS/notion-credits.15m.sh"
+curl -fsSL https://github.com/sue738/notion-credits-xbar/releases/latest/download/notion-credits.15m.sh -o "$PLUGINS/notion-credits.15m.sh"
 chmod +x "$PLUGINS/notion-credits.15m.sh"
 "$PLUGINS/notion-credits.15m.sh" set-token
 ```
@@ -101,6 +104,11 @@ Run `notion-credits.15m.sh remove-token`, then delete the file from the plugin f
 It calls the [Retrieve agent insights](https://developers.notion.com/reference/notion-agent-apis/retrieve-agent-insights) endpoint of the Notion API (public beta):
 first for your personal agent (`notion_ai`), then for each Custom Agent you can edit.
 Agents you can only view are skipped. Nothing else is read.
+
+## Security
+
+Install from a release: release files cannot be changed after they are published, and every commit is signed.
+See [SECURITY.md](SECURITY.md) for what the script does and how to report a problem.
 
 ## License
 
