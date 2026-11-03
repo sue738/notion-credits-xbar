@@ -106,6 +106,15 @@ def color_for(left, limit):
     ratio = left / limit
     return "red" if ratio < 0.1 else "orange" if ratio < 0.3 else ""
 
+# Monthly allowance per member (Business/Enterprise). Standard and Select are separate pools.
+STANDARD = int(os.environ.get("NOTION_STANDARD_CREDITS", "1500"))
+SELECT = int(os.environ.get("NOTION_SELECT_CREDITS", "500"))
+MONO = "font=Menlo size=12"
+
+def bar(used, cap, width=12):
+    filled = round(min(used / cap, 1) * width) if cap else 0
+    return "▰" * filled + "▱" * (width - filled)
+
 def footer():
     print("---")
     print("Open Notion | href=https://www.notion.so")
@@ -130,10 +139,10 @@ if code == 200:
         print(f"N {fmt(left)}" + (f" | color={c}" if c else ""))
         print("---")
         print(f"Left {fmt(left)} / limit {fmt(limit)} ({left / limit:.0%})")
-        print(f"Used this period {fmt(used)}")
+        print(f"{bar(used, limit)}  {fmt(used)} / {fmt(limit)} | {MONO}" + (f" color={c}" if c else ""))
         footer()
         raise SystemExit
-    personal = f"Personal Notion AI: {d.get('runs_completed', 0)} runs, {fmt(used)} credits (no limit)"
+    personal = (used, d.get("runs_completed", 0))
 elif code == 403 and d.get("code") == "workspace_credits_exhausted":
     print("N 0 | color=red")
     print("---")
@@ -165,20 +174,29 @@ for a in agents:
 
 print(f"N {fmt(total)}")
 print("---")
-print(f"Used this period {fmt(total)} ({len(rows)} agents you can edit)")
-print((personal or "Personal allowance not available via API") + " | color=gray")
+if personal:
+    used, runs = personal
+    print(f"You: Notion AI {runs} runs this period")
+    print(f"Standard {bar(used, STANDARD)}  {fmt(used)} / {fmt(STANDARD)} | {MONO}")
+    print(f"Select   {bar(0, SELECT)}  ? / {fmt(SELECT)} | {MONO} color=gray")
+    print("The API reports one total, counted against Standard here | color=gray size=11")
+else:
+    print("Personal usage not available via the API | color=gray")
 print("---")
+print(f"Custom Agents you can edit: {fmt(total)} used ({len(rows)} agents)")
 for used, name, limit, pause in sorted(rows, key=lambda r: -r[0]):
     if not used:
         continue
-    cap = f" / limit {fmt(limit)}" if isinstance(limit, (int, float)) else ""
-    c = ""
+    name = name.replace("|", "/")
     if isinstance(limit, (int, float)) and limit > 0:
         c = color_for(max(limit - used, 0), limit)
-    line = f"{name.replace('|', '/')}  {fmt(used)}{cap}"
+        line = f"{bar(used, limit)}  {fmt(used):>6} / {fmt(limit):<6} {name}"
+    else:
+        c = ""
+        line = f"{'':12}  {fmt(used):>6}          {name}"
     if pause:
         line += f" ({pause})"
-    print(line + (f" | color={c}" if c else ""))
+    print(f"{line} | {MONO}" + (f" color={c}" if c else ""))
 idle = sum(1 for r in rows if not r[0])
 if idle:
     print(f"{idle} agents with no usage this period | color=gray")

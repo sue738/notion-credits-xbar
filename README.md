@@ -5,32 +5,36 @@ See how many Notion AI credits you are using, without opening Notion.
 [日本語の説明はこちら](README.ja.md)
 
 ```
-N 2,060                                           ← menu bar
-───────────────────────────────────────────
-Used this period 2,060 (19 agents you can edit)
-Personal Notion AI: 182 runs, 0 credits (no limit)
-───────────────────────────────────────────
-Ticket triage agent    1,043 / limit 3,000
-Post-mortem manager      378 / limit 3,750
-Spec writer              332 / limit 7,500
-16 agents with no usage this period
-───────────────────────────────────────────
-Open Notion
-Refresh
-───────────────────────────────────────────
-Create a token in Notion
-Set token…
+N 2,060                                              ← menu bar
+──────────────────────────────────────────────
+You: Notion AI 183 runs this period
+Standard ▱▱▱▱▱▱▱▱▱▱▱▱      0 / 1,500
+Select   ▱▱▱▱▱▱▱▱▱▱▱▱      ? / 500
+──────────────────────────────────────────────
+Custom Agents you can edit: 2,060 used (19 agents)
+▰▰▰▰▱▱▱▱▱▱▱▱   1,043 / 3,000  Ticket triage agent
+▰▱▱▱▱▱▱▱▱▱▱▱     378 / 3,750  Post-mortem manager
+▰▱▱▱▱▱▱▱▱▱▱▱     332 / 7,500  Spec writer
+14 agents with no usage this period
+──────────────────────────────────────────────
+Open Notion · Refresh · Create a token in Notion · Set token…
 ```
 
-## What the number means
+## What the numbers mean
 
-| Your workspace | The menu bar shows |
+Each member of a Business or Enterprise workspace gets two separate monthly allowances.
+They reset every month and cannot be combined.
+
+| Allowance | Used by |
 | --- | --- |
-| Gives each member a credit limit | Credits **left** this period, e.g. `N 680` |
-| Has no per-member limit | Credits **used** this period by the Custom Agents you can edit, e.g. `N 2,060` |
+| **Standard** 1,500 | Notion Agent on Auto, AI editing, AI blocks, translation |
+| **Select** 500 | Notion Agent with a model you pick, and Custom Agents you own (by default) |
 
-Custom Agents spend their owner's credits by default, so the second number is close to "what I am spending".
-An agent turns **orange** below 30% of its limit and **red** below 10%.
+- **Menu bar:** if your workspace sets a per-member limit, credits **left**. Otherwise, credits **used** this month by the Custom Agents you can edit.
+- **You:** your personal usage as a bar. The API reports one total without splitting Standard and Select, so it is drawn against Standard.
+- **Custom Agents:** each agent's usage against its own limit. A bar turns **orange** below 30% left and **red** below 10%.
+
+If your plan has different amounts, set `NOTION_STANDARD_CREDITS` / `NOTION_SELECT_CREDITS` at the top of the file.
 
 ## Install (5 minutes)
 
