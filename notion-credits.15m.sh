@@ -368,39 +368,42 @@ for a in agents:
     pause = d.get("pause_reason")
     row = (num(d.get("total_credits_used")), clean(a.get("name", "?")), d.get("credit_limit"), clean(pause, 40) if pause else None)
     (mine if (d.get("created_by") or {}).get("id") == me else others).append(row)
-sel_used = sum(r[0] for r in mine)
+# The insights API counts premium AI credits only. Notion AI on Auto spends Standard credits,
+# which the API does not report, so Standard is shown as unknown. Premium use of your Notion AI
+# (a model you picked) and Custom Agents you created both spend Select credits.
+agents_used = sum(r[0] for r in mine)
+sel_used = std_used + agents_used
 
-# Menu bar: two bars, colored by whichever is closer to running out
 period = billing_period(std_runs)
 elapsed = None
 if period:
     start, reset, exact = period
     elapsed = min(max((time.time() - start) / (reset - start), 0), 1)
 
-def gauge(label, used, cap):
-    return {"label": label, "used": used / cap if cap else 0, "elapsed": elapsed if elapsed is not None else 1, "known": bool(cap)}
+def gauge(label, used, cap, known=True):
+    return {"label": label, "used": used / cap if cap else 0, "elapsed": elapsed if elapsed is not None else 1, "known": known and bool(cap)}
 
 images = render({
-    "bars": [gauge("Std", std_used, STANDARD), gauge("Sel", sel_used, SELECT)],
-    "rows": [gauge("Standard", std_used, STANDARD), gauge("Select", sel_used, SELECT)],
+    "bars": [gauge("Std", 0, STANDARD, False), gauge("Sel", sel_used, SELECT)],
+    "rows": [gauge("Standard", 0, STANDARD, False), gauge("Select", sel_used, SELECT)],
 })
 
 # Menu bar, drawn like AgentWatch: bar = credits used, white tick = time elapsed, red = using faster than time
 if images:
     print(f"| image={images['title']}")
 else:
-    c = color_for(std_used, STANDARD) or color_for(sel_used, SELECT)
-    print(with_color(f"S{bar(std_used, STANDARD, 5)} X{bar(sel_used, SELECT, 5)}", c, "font=Menlo size=11"))
+    print(with_color(f"S— X{bar(sel_used, SELECT, 5)}", color_for(sel_used, SELECT), "font=Menlo size=11"))
 print("---")
-for i, (used, cap, note) in enumerate((
-    (std_used, STANDARD, f"Notion AI · {fmt(std_runs)} runs"),
-    (sel_used, SELECT, f"{len(mine)} Custom Agents you created"),
-)):
-    if images:
-        print(f"| image={images['rows'][i]}")
-    else:
-        print(with_color(f"{('Standard', 'Select')[i]:<8} {pct(used, cap):>4} {bar(used, cap, 14, elapsed)}", color_for(used, cap)))
-    print(f"{fmt(used)} / {fmt(cap)} used · {note} | color=gray size=11")
+if images:
+    print(f"| image={images['rows'][0]}")
+else:
+    print("Standard    —")
+print(f"Not reported by the API · Notion AI {fmt(std_runs)} runs | color=gray size=11")
+if images:
+    print(f"| image={images['rows'][1]}")
+else:
+    print(with_color(f"Select   {pct(sel_used, SELECT):>4} {bar(sel_used, SELECT, 14, elapsed)}", color_for(sel_used, SELECT)))
+print(f"{fmt(sel_used)} / {fmt(SELECT)} used · picked models {fmt(std_used)} + your agents {fmt(agents_used)} | color=gray size=11")
 for used, name, limit, pause in sorted(mine, key=lambda r: -r[0]):
     if used:
         print(f"--{name}  {fmt(used)}" + (f" ({pause})" if pause else ""))
@@ -415,7 +418,8 @@ print("---")
 print("About these numbers | color=gray size=11")
 print("--Bar = credits used · white line = time elapsed")
 print("--Red = using credits faster than the month is passing")
-print("--The API gives one total for Notion AI, shown as Standard")
+print("--Standard (Notion AI on Auto) is not in the API. See Settings → Notion AI → Usage")
+print("--Select = Notion AI with a model you picked + Custom Agents you created")
 if not (period and exact):
     print("--Reset date is estimated. Set NOTION_RESET_DAY for the exact day")
 
