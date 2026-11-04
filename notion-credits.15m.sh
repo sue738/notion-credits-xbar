@@ -1,6 +1,6 @@
 #!/bin/bash
 # <xbar.title>Notion Credits</xbar.title>
-# <xbar.version>v1.3</xbar.version>
+# <xbar.version>v1.2</xbar.version>
 # <xbar.author>sue738</xbar.author>
 # <xbar.author.github>sue738</xbar.author.github>
 # <xbar.desc>Shows your own Notion AI credits as two bars: Standard (1,500/month) and Select (500/month).</xbar.desc>
@@ -26,78 +26,40 @@ export NOTION_SELECT_CREDITS="${NOTION_SELECT_CREDITS:-500}"
 # Leave empty to estimate it from your usage history.
 export NOTION_RESET_DAY="${NOTION_RESET_DAY:-}"
 
-# Optional, for Enterprise organization owners: team usage and a Slack report.
-# Needs an organization bot token with the user:read scope ("set-admin-token") and the
-# workspace ID (Settings → Workspace → the ID in the URL, or ask your admin).
-export NOTION_SPACE_ID="${NOTION_SPACE_ID:-}"
-ADMIN_SERVICE="${NOTION_CREDITS_ADMIN_SERVICE:-notion-admin}"
-WEBHOOK_SERVICE="${NOTION_CREDITS_WEBHOOK_SERVICE:-notion-credits-slack-webhook}"
-
-# ask_secret PROMPT: read a secret from the terminal (hidden), a pipe, or a dialog when run from the menu
-ask_secret() {
-  local T
-  if [ -t 0 ]; then
-    printf '%s ' "$1" >&2
-    read -rs T; echo >&2
-  else
-    read -r T
-  fi
-  if [ -z "$T" ]; then
-    T=$(osascript - "$1" <<'OSA'
-on run argv
-  text returned of (display dialog (item 1 of argv) default answer "" with hidden answer buttons {"Cancel", "Save"} default button "Save" with title "Notion Credits")
-end run
-OSA
-) || return 1
-  fi
-  printf '%s' "$T"
-}
-
-# save_secret SERVICE PATTERN VALUE: store VALUE in the Keychain if it matches the shell PATTERN
-save_secret() {
-  # shellcheck disable=SC2254
-  case "$3" in
-    $2) ;;
-    *) echo "That does not look right (expected $2)." >&2; return 1 ;;
+save_token() {
+  case "$1" in
+    ntn_*|secret_*) ;;
+    *) echo "That does not look like a Notion token (it should start with ntn_)." >&2; return 1 ;;
   esac
-  security add-generic-password -U -a "$USER" -s "$1" -w "$3" && echo "Saved to Keychain ($1)."
-}
-
-remove_secret() {
-  security delete-generic-password -a "$USER" -s "$1" >/dev/null 2>&1 && echo "Removed from Keychain ($1)." || echo "Nothing in Keychain ($1)."
+  security add-generic-password -U -a "$USER" -s "$SERVICE" -w "$1" && echo "Saved to Keychain ($SERVICE)."
 }
 
 case "$1" in
   set-token)
-    T=$(ask_secret "Paste your Notion personal access token:") || exit 0
-    save_secret "$SERVICE" "ntn_*" "$T"
+    if [ -t 0 ]; then
+      # Terminal: hidden prompt
+      printf 'Paste your Notion personal access token: ' >&2
+      read -rs T; echo >&2
+    else
+      # Piped in (echo ntn_... | ./notion-credits.15m.sh set-token), or empty when run from the menu
+      read -r T
+    fi
+    if [ -z "$T" ]; then
+      # Menu: ask in a dialog
+      T=$(osascript -e 'text returned of (display dialog "Paste your Notion personal access token:" default answer "" with hidden answer buttons {"Cancel", "Save"} default button "Save" with title "Notion Credits")') || exit 0
+    fi
+    save_token "$T"
     exit
     ;;
-  set-admin-token)
-    T=$(ask_secret "Paste your Notion organization bot token (user:read scope):") || exit 0
-    save_secret "$ADMIN_SERVICE" "ntn_*" "$T"
-    exit
+  remove-token)
+    security delete-generic-password -a "$USER" -s "$SERVICE" >/dev/null 2>&1 && echo "Removed from Keychain ($SERVICE)." || echo "No token in Keychain ($SERVICE)."
+    exit 0
     ;;
-  set-slack-webhook)
-    T=$(ask_secret "Paste the Slack incoming webhook URL:") || exit 0
-    save_secret "$WEBHOOK_SERVICE" "https://hooks.slack.com/services/*" "$T"
-    exit
-    ;;
-  remove-token) remove_secret "$SERVICE"; exit 0 ;;
-  remove-admin-token) remove_secret "$ADMIN_SERVICE"; exit 0 ;;
-  remove-slack-webhook) remove_secret "$WEBHOOK_SERVICE"; exit 0 ;;
-  team-report) export NOTION_CREDITS_MODE=report ;;
   help|-h|--help)
-    echo "Usage: $(basename "$0") [command]"
-    echo "  (no argument)         print the xbar menu"
-    echo "  set-token             save your Notion personal access token to the Keychain"
-    echo "  remove-token          delete it"
-    echo "  set-admin-token       save an organization bot token (Enterprise, user:read) for team usage"
-    echo "  remove-admin-token    delete it"
-    echo "  set-slack-webhook     save a Slack incoming webhook URL for team-report"
-    echo "  remove-slack-webhook  delete it"
-    echo "  team-report           post team usage to Slack (needs admin token, NOTION_SPACE_ID, webhook)"
-    echo "Secrets are read from the terminal (hidden), a pipe, or a dialog."
+    echo "Usage: $(basename "$0") [set-token | remove-token]"
+    echo "  (no argument)  print the xbar menu"
+    echo "  set-token      save your Notion token to the Keychain (prompt, or pipe it in)"
+    echo "  remove-token   delete the saved token"
     exit 0
     ;;
 esac
@@ -121,39 +83,21 @@ if [ -z "$TOKEN" ]; then
   exit 0
 fi
 
-NOTION_ADMIN_TOKEN=""
-SLACK_WEBHOOK=""
-if [ -n "$NOTION_SPACE_ID" ]; then
-  NOTION_ADMIN_TOKEN=$(security find-generic-password -a "$USER" -s "$ADMIN_SERVICE" -w 2>/dev/null)
-  [ "$NOTION_CREDITS_MODE" = report ] && SLACK_WEBHOOK=$(security find-generic-password -a "$USER" -s "$WEBHOOK_SERVICE" -w 2>/dev/null)
-fi
-
-NOTION_CREDITS_SELF="$SELF" NOTION_TOKEN="$TOKEN" NOTION_ADMIN_TOKEN="$NOTION_ADMIN_TOKEN" SLACK_WEBHOOK="$SLACK_WEBHOOK" python3 <<'EOF'
+NOTION_TOKEN="$TOKEN" python3 <<'EOF'
 import calendar, json, os, time, urllib.request, urllib.error
 from datetime import datetime
 
-# NOTION_API_ROOT exists only so the tests can point at a local stub
-ROOT = os.environ.get("NOTION_API_ROOT", "https://api.notion.com")
-if ROOT != "https://api.notion.com" and not ROOT.startswith("http://127.0.0.1:"):
-    ROOT = "https://api.notion.com"
-API = ROOT + "/v1"
+API = "https://api.notion.com/v1"
 HEADERS = {
     "Authorization": "Bearer " + os.environ["NOTION_TOKEN"],
     "Notion-Version": "2026-03-11",
 }
-ADMIN_TOKEN = os.environ.get("NOTION_ADMIN_TOKEN", "")
-SPACE_ID = os.environ.get("NOTION_SPACE_ID", "")
-MODE = os.environ.get("NOTION_CREDITS_MODE", "")
 STANDARD = int(os.environ["NOTION_STANDARD_CREDITS"])
 SELECT = int(os.environ["NOTION_SELECT_CREDITS"])
 MONO = "font=Menlo size=12"
 
-def get(path, admin=False):
-    if admin:
-        req = urllib.request.Request(ROOT + "/admin/v1" + path, headers={
-            "Authorization": "Bearer " + ADMIN_TOKEN, "Notion-Version": "2026-06-01"})
-    else:
-        req = urllib.request.Request(API + path, headers=HEADERS)
+def get(path):
+    req = urllib.request.Request(API + path, headers=HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
             return r.status, json.load(r)
@@ -386,86 +330,6 @@ def render(spec):
     except Exception:
         return None
 
-def is_id(v):
-    return isinstance(v, str) and 0 < len(v) <= 64 and all(ch.isalnum() or ch == "-" for ch in v)
-
-def paged(path):
-    items, cursor = [], None
-    for _ in range(50):
-        sep = "&" if "?" in path else "?"
-        code, d = get(path + sep + "page_size=100" + (f"&start_cursor={cursor}" if cursor else ""), admin=True)
-        if code != 200:
-            return None, code, d
-        items += d.get("results", [])
-        cursor = d.get("next_cursor")
-        if not d.get("has_more") or not is_id(cursor):
-            break
-    return items, 200, {}
-
-def fetch_team():
-    """Per-member Standard / Select / Notion credits for this period (Admin API, Enterprise only)."""
-    if not (ADMIN_TOKEN and is_id(SPACE_ID)):
-        return None
-    usage, code, d = paged(f"/spaces/{SPACE_ID}/users/credit_usage")
-    if usage is None:
-        return {"error": f"HTTP {code} {clean(d.get('code', ''), 40)}"}
-    people, _, _ = paged(f"/spaces/{SPACE_ID}/users")
-    names = {}
-    for u in people or []:
-        names[u.get("id")] = clean(u.get("name") or (u.get("person") or {}).get("email") or "?", 40)
-    rows, start, end = [], None, None
-    for u in usage:
-        t = u.get("credits_used_by_type") or {}
-        rows.append({
-            "id": u.get("id"), "name": names.get(u.get("id"), "(unknown)"),
-            "standard": num(t.get("standard_credits")), "select": num(t.get("select_credits")),
-            "notion": num(t.get("notion_credits")),
-        })
-        start = start or num(u.get("metrics_period_start_ms")) / 1000 or None
-        end = end or num(u.get("metrics_period_end_ms")) / 1000 or None
-    rows.sort(key=lambda r: -(r["standard"] / STANDARD + r["select"] / SELECT + r["notion"] / 1000))
-    return {"rows": rows, "start": start, "end": end}
-
-def share(r):
-    return max(r["standard"] / STANDARD, r["select"] / SELECT)
-
-if MODE == "report":
-    import sys
-    webhook = os.environ.get("SLACK_WEBHOOK", "")
-    local_test = ROOT != "https://api.notion.com" and webhook == ROOT + "/slack"
-    if not (webhook.startswith("https://hooks.slack.com/services/") or local_test):
-        sys.exit("No Slack webhook. Run: notion-credits.15m.sh set-slack-webhook")
-    team = fetch_team()
-    if not team or "error" in team:
-        sys.exit("Team usage unavailable: " + (team or {}).get("error", "set NOTION_SPACE_ID and set-admin-token"))
-    rows, start, end = team["rows"], team["start"], team["end"]
-    for r in rows:
-        # Slack reads <...> as mentions and links, so a name like "<!channel>" must not get through
-        r["name"] = r["name"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("`", "'")
-    elapsed_r = min(max((time.time() - start) / (end - start), 0), 1) if start and end else None
-    head = "Notion AI credits"
-    if start and end:
-        head += f" · {datetime.fromtimestamp(start):%b %-d} – {datetime.fromtimestamp(end - 1):%b %-d}"
-        head += f" ({elapsed_r:.0%} of the month)"
-    active = [r for r in rows if r["standard"] or r["select"] or r["notion"]]
-    lines = [f"*{head}*",
-             f"{len(active)} of {len(rows)} members used AI · Standard {fmt(sum(r['standard'] for r in rows))}"
-             f" · Select {fmt(sum(r['select'] for r in rows))} · Notion credits {fmt(sum(r['notion'] for r in rows))}"]
-    ahead = [r for r in rows if elapsed_r is not None and share(r) > max(elapsed_r, 0.5)]
-    if ahead:
-        lines.append(f":warning: Ahead of pace: " + ", ".join(f"{r['name']} ({share(r):.0%})" for r in ahead[:10]))
-    lines.append("```")
-    lines.append(f"{'':24} {'Standard':>13} {'Select':>11} {'Notion':>7}")
-    for r in active[:15]:
-        lines.append(f"{r['name'][:24]:24} {fmt(r['standard']):>6} / {fmt(STANDARD):<5}"
-                     f" {fmt(r['select']):>4} / {fmt(SELECT):<4} {fmt(r['notion']):>7}")
-    lines.append("```")
-    body = json.dumps({"text": "\n".join(lines)}).encode()
-    req = urllib.request.Request(webhook, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        print("Posted to Slack:", r.status)
-    raise SystemExit
-
 # Standard: your personal Notion AI
 code, d = get("/agents/notion_ai/insights")
 if code == 403 and d.get("code") == "workspace_credits_exhausted":
@@ -509,18 +373,8 @@ for a in agents:
 # (a model you picked) and Custom Agents you created both spend Select credits.
 agents_used = sum(r[0] for r in mine)
 sel_used = std_used + agents_used
-std_known, std_val = False, 0
 
-team = fetch_team()
-me_row = next((r for r in (team or {}).get("rows", []) if r["id"] == me), None)
-if me_row:
-    # The Admin API splits your usage by type, so both bars are exact
-    std_known, std_val, sel_used = True, me_row["standard"], me_row["select"]
-
-if team and team.get("start") and team.get("end"):
-    period = (team["start"], team["end"], True)
-else:
-    period = billing_period(std_runs)
+period = billing_period(std_runs)
 elapsed = None
 if period:
     start, reset, exact = period
@@ -530,33 +384,26 @@ def gauge(label, used, cap, known=True):
     return {"label": label, "used": used / cap if cap else 0, "elapsed": elapsed if elapsed is not None else 1, "known": known and bool(cap)}
 
 images = render({
-    "bars": [gauge("Std", std_val, STANDARD, std_known), gauge("Sel", sel_used, SELECT)],
-    "rows": [gauge("Standard", std_val, STANDARD, std_known), gauge("Select", sel_used, SELECT)],
+    "bars": [gauge("Std", 0, STANDARD, False), gauge("Sel", sel_used, SELECT)],
+    "rows": [gauge("Standard", 0, STANDARD, False), gauge("Select", sel_used, SELECT)],
 })
 
 # Menu bar, drawn like AgentWatch: bar = credits used, white tick = time elapsed, red = using faster than time
 if images:
     print(f"| image={images['title']}")
 else:
-    std_txt = bar(std_val, STANDARD, 5) if std_known else "—"
-    print(with_color(f"S{std_txt} X{bar(sel_used, SELECT, 5)}", color_for(sel_used, SELECT), "font=Menlo size=11"))
+    print(with_color(f"S— X{bar(sel_used, SELECT, 5)}", color_for(sel_used, SELECT), "font=Menlo size=11"))
 print("---")
 if images:
     print(f"| image={images['rows'][0]}")
 else:
-    print(f"Standard {pct(std_val, STANDARD) if std_known else '—'}")
-if std_known:
-    print(f"{fmt(std_val)} / {fmt(STANDARD)} used · Notion AI {fmt(std_runs)} runs | color=gray size=11")
-else:
-    print(f"Not reported by the API · Notion AI {fmt(std_runs)} runs | color=gray size=11")
+    print("Standard    —")
+print(f"Not reported by the API · Notion AI {fmt(std_runs)} runs | color=gray size=11")
 if images:
     print(f"| image={images['rows'][1]}")
 else:
     print(with_color(f"Select   {pct(sel_used, SELECT):>4} {bar(sel_used, SELECT, 14, elapsed)}", color_for(sel_used, SELECT)))
-if me_row:
-    print(f"{fmt(sel_used)} / {fmt(SELECT)} used · incl. your agents {fmt(agents_used)} | color=gray size=11")
-else:
-    print(f"{fmt(sel_used)} / {fmt(SELECT)} used · picked models {fmt(std_used)} + your agents {fmt(agents_used)} | color=gray size=11")
+print(f"{fmt(sel_used)} / {fmt(SELECT)} used · picked models {fmt(std_used)} + your agents {fmt(agents_used)} | color=gray size=11")
 for used, name, limit, pause in sorted(mine, key=lambda r: -r[0]):
     if used:
         print(f"--{name}  {fmt(used)}" + (f" ({pause})" if pause else ""))
@@ -571,30 +418,10 @@ print("---")
 print("About these numbers | color=gray size=11")
 print("--Bar = credits used · white line = time elapsed")
 print("--Red = using credits faster than the month is passing")
-if not std_known:
-    print("--Standard (Notion AI on Auto) is not in the API. See Settings → Notion AI → Usage")
+print("--Standard (Notion AI on Auto) is not in the API. See Settings → Notion AI → Usage")
 print("--Select = Notion AI with a model you picked + Custom Agents you created")
 if not (period and exact):
     print("--Reset date is estimated. Set NOTION_RESET_DAY for the exact day")
-
-# Team usage (organization owners with an admin token)
-if team and "error" in team:
-    print(f"Team usage: {team['error']} | color=orange size=11")
-elif team:
-    rows = team["rows"]
-    active_people = [r for r in rows if r["standard"] or r["select"] or r["notion"]]
-    print(f"Team usage · {len(active_people)} of {len(rows)} members | size=11")
-    print(f"--{'':22} {'Std':>11} {'Sel':>9} {'Notion':>6} | {MONO} color=gray")
-    for r in active_people[:40]:
-        c = ""
-        if elapsed is not None and share(r) > max(elapsed, 0.5):
-            c = "red"
-        line = (f"{r['name'][:22]:22} {fmt(r['standard']):>5}/{fmt(STANDARD):<5}"
-                f" {fmt(r['select']):>4}/{fmt(SELECT):<4} {fmt(r['notion']):>6}")
-        print("--" + with_color(line, c))
-    if len(active_people) > 40:
-        print(f"--…and {len(active_people) - 40} more | color=gray")
-    print(f"--Post to Slack now | bash=\"{os.environ.get('NOTION_CREDITS_SELF', '')}\" param1=team-report terminal=false")
 
 # Agents others own but you can edit: not your credits, shown for reference
 active = [r for r in others if r[0]]
@@ -605,7 +432,5 @@ if active:
         print(f"--{name}  {fmt(used)}{cap}" + (f" ({pause})" if pause else ""))
 footer()
 EOF
-rc=$?
-[ "$NOTION_CREDITS_MODE" = report ] && exit $rc
 echo "---"
 token_menu
