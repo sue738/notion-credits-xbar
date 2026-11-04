@@ -131,7 +131,6 @@ fi
 
 NOTION_CREDITS_SELF="$SELF" NOTION_TOKEN="$TOKEN" NOTION_ADMIN_TOKEN="$NOTION_ADMIN_TOKEN" SLACK_WEBHOOK="$SLACK_WEBHOOK" python3 <<'EOF'
 import calendar, json, os, time, urllib.request, urllib.error
-from urllib.parse import quote
 from datetime import datetime
 
 # NOTION_API_ROOT exists only so the tests can point at a local stub
@@ -395,13 +394,12 @@ def paged(path):
     items, cursor = [], None
     for _ in range(50):
         sep = "&" if "?" in path else "?"
-        code, d = get(path + sep + "page_size=100" + (f"&start_cursor={quote(cursor, safe='')}" if cursor else ""), admin=True)
+        code, d = get(path + sep + "page_size=100" + (f"&start_cursor={cursor}" if cursor else ""), admin=True)
         if code != 200:
             return None, code, d
         items += d.get("results", [])
         cursor = d.get("next_cursor")
-        # Cursors are opaque strings; they are URL-encoded above, so only check they are sane
-        if not d.get("has_more") or not isinstance(cursor, str) or not 0 < len(cursor) <= 512:
+        if not d.get("has_more") or not is_id(cursor):
             break
     return items, 200, {}
 
@@ -422,14 +420,12 @@ def fetch_team():
         rows.append({
             "id": u.get("id"), "name": names.get(u.get("id"), "(unknown)"),
             "standard": num(t.get("standard_credits")), "select": num(t.get("select_credits")),
-            # null = Notion does not count this type for the period yet (e.g. the month the new credits started)
-            "typed": t.get("standard_credits") is not None or t.get("select_credits") is not None,
             "notion": num(t.get("notion_credits")),
         })
         start = start or num(u.get("metrics_period_start_ms")) / 1000 or None
         end = end or num(u.get("metrics_period_end_ms")) / 1000 or None
     rows.sort(key=lambda r: -(r["standard"] / STANDARD + r["select"] / SELECT + r["notion"] / 1000))
-    return {"rows": rows, "start": start, "end": end, "typed": any(r["typed"] for r in rows)}
+    return {"rows": rows, "start": start, "end": end}
 
 def share(r):
     return max(r["standard"] / STANDARD, r["select"] / SELECT)
@@ -453,8 +449,6 @@ if MODE == "report":
         head += f" · {datetime.fromtimestamp(start):%b %-d} – {datetime.fromtimestamp(end - 1):%b %-d}"
         head += f" ({elapsed_r:.0%} of the month)"
     active = [r for r in rows if r["standard"] or r["select"] or r["notion"]]
-    if not team["typed"]:
-        head += " · Standard / Select not counted for this period yet"
     lines = [f"*{head}*",
              f"{len(active)} of {len(rows)} members used AI · Standard {fmt(sum(r['standard'] for r in rows))}"
              f" · Select {fmt(sum(r['select'] for r in rows))} · Notion credits {fmt(sum(r['notion'] for r in rows))}"]
@@ -520,7 +514,7 @@ std_known, std_val = False, 0
 
 team = fetch_team()
 me_row = next((r for r in (team or {}).get("rows", []) if r["id"] == me), None)
-if me_row and me_row["typed"]:
+if me_row:
     # The Admin API splits your usage by type, so both bars are exact
     std_known, std_val, sel_used = True, me_row["standard"], me_row["select"]
 
@@ -560,7 +554,7 @@ if images:
     print(f"| image={images['rows'][1]}")
 else:
     print(with_color(f"Select   {pct(sel_used, SELECT):>4} {bar(sel_used, SELECT, 14, elapsed)}", color_for(sel_used, SELECT)))
-if me_row and me_row["typed"]:
+if me_row:
     print(f"{fmt(sel_used)} / {fmt(SELECT)} used · incl. your agents {fmt(agents_used)} | color=gray size=11")
 else:
     print(f"{fmt(sel_used)} / {fmt(SELECT)} used · picked models {fmt(std_used)} + your agents {fmt(agents_used)} | color=gray size=11")
@@ -591,8 +585,6 @@ elif team:
     rows = team["rows"]
     active_people = [r for r in rows if r["standard"] or r["select"] or r["notion"]]
     print(f"Team usage · {len(active_people)} of {len(rows)} members | size=11")
-    if not team["typed"]:
-        print("--Standard / Select are not counted for this period yet | color=gray")
     print(f"--{'':22} {'Std':>11} {'Sel':>9} {'Notion':>6} | {MONO} color=gray")
     for r in active_people[:40]:
         c = ""
