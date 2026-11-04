@@ -57,6 +57,7 @@ OSA
 save_secret() {
   # shellcheck disable=SC2254
   case "$3" in
+    *[[:space:]]*|"") echo "That is empty or has spaces in it. Copy the token again." >&2; return 1 ;;
     $2) ;;
     *) echo "That does not look right (expected $2)." >&2; return 1 ;;
   esac
@@ -75,7 +76,7 @@ case "$1" in
     ;;
   set-admin-token)
     T=$(ask_secret "Paste your Notion organization bot token (user:read scope):") || exit 0
-    save_secret "$ADMIN_SERVICE" "ntn_*" "$T"
+    save_secret "$ADMIN_SERVICE" "????????????????????*" "$T"
     exit
     ;;
   set-slack-webhook)
