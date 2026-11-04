@@ -374,7 +374,28 @@ for a in agents:
 agents_used = sum(r[0] for r in mine)
 sel_used = std_used + agents_used
 
-period = billing_period(std_runs)
+# Optional: the numbers from Settings → Notion AI, written by a separate job you run yourself
+# (see "Exact numbers from the Settings page" in the README). Used while less than 36 hours old.
+usage, std_known, std_val = None, False, 0
+try:
+    with open(os.path.expanduser("~/Library/Caches/notion-credits-usage.json")) as f:
+        usage = json.load(f)
+    if time.time() - num(usage.get("fetched_at")) / 1000 > 36 * 3600:
+        usage = None
+except Exception:
+    usage = None
+if usage:
+    if isinstance(usage.get("standard"), dict):
+        std_known, std_val = True, num(usage["standard"].get("used"))
+        STANDARD = num(usage["standard"].get("limit")) or STANDARD
+    if isinstance(usage.get("select"), dict):
+        sel_used = num(usage["select"].get("used"))
+        SELECT = num(usage["select"].get("limit")) or SELECT
+
+if usage and usage.get("period_start_ms") and usage.get("period_end_ms"):
+    period = (num(usage["period_start_ms"]) / 1000, num(usage["period_end_ms"]) / 1000, True)
+else:
+    period = billing_period(std_runs)
 elapsed = None
 if period:
     start, reset, exact = period
@@ -384,26 +405,34 @@ def gauge(label, used, cap, known=True):
     return {"label": label, "used": used / cap if cap else 0, "elapsed": elapsed if elapsed is not None else 1, "known": known and bool(cap)}
 
 images = render({
-    "bars": [gauge("Std", 0, STANDARD, False), gauge("Sel", sel_used, SELECT)],
-    "rows": [gauge("Standard", 0, STANDARD, False), gauge("Select", sel_used, SELECT)],
+    "bars": [gauge("Std", std_val, STANDARD, std_known), gauge("Sel", sel_used, SELECT)],
+    "rows": [gauge("Standard", std_val, STANDARD, std_known), gauge("Select", sel_used, SELECT)],
 })
 
 # Menu bar, drawn like AgentWatch: bar = credits used, white tick = time elapsed, red = using faster than time
 if images:
     print(f"| image={images['title']}")
 else:
-    print(with_color(f"S— X{bar(sel_used, SELECT, 5)}", color_for(sel_used, SELECT), "font=Menlo size=11"))
+    std_txt = bar(std_val, STANDARD, 5) if std_known else "—"
+    print(with_color(f"S{std_txt} X{bar(sel_used, SELECT, 5)}", color_for(sel_used, SELECT), "font=Menlo size=11"))
 print("---")
 if images:
     print(f"| image={images['rows'][0]}")
 else:
-    print("Standard    —")
-print(f"Not reported by the API · Notion AI {fmt(std_runs)} runs | color=gray size=11")
+    print(f"Standard {pct(std_val, STANDARD) if std_known else '—'}")
+if std_known:
+    when = datetime.fromtimestamp(num(usage["fetched_at"]) / 1000).strftime("%-m/%-d %H:%M")
+    print(f"{fmt(std_val)} / {fmt(STANDARD)} used · from Settings, {when} | color=gray size=11")
+else:
+    print(f"Not reported by the API · Notion AI {fmt(std_runs)} runs | color=gray size=11")
 if images:
     print(f"| image={images['rows'][1]}")
 else:
     print(with_color(f"Select   {pct(sel_used, SELECT):>4} {bar(sel_used, SELECT, 14, elapsed)}", color_for(sel_used, SELECT)))
-print(f"{fmt(sel_used)} / {fmt(SELECT)} used · picked models {fmt(std_used)} + your agents {fmt(agents_used)} | color=gray size=11")
+if usage and isinstance(usage.get("select"), dict):
+    print(f"{fmt(sel_used)} / {fmt(SELECT)} used · from Settings | color=gray size=11")
+else:
+    print(f"{fmt(sel_used)} / {fmt(SELECT)} used · picked models {fmt(std_used)} + your agents {fmt(agents_used)} | color=gray size=11")
 for used, name, limit, pause in sorted(mine, key=lambda r: -r[0]):
     if used:
         print(f"--{name}  {fmt(used)}" + (f" ({pause})" if pause else ""))
@@ -418,7 +447,8 @@ print("---")
 print("About these numbers | color=gray size=11")
 print("--Bar = credits used · white line = time elapsed")
 print("--Red = using credits faster than the month is passing")
-print("--Standard (Notion AI on Auto) is not in the API. See Settings → Notion AI → Usage")
+if not std_known:
+    print("--Standard (Notion AI on Auto) is not in the API. See Settings → Notion AI → Usage")
 print("--Select = Notion AI with a model you picked + Custom Agents you created")
 if not (period and exact):
     print("--Reset date is estimated. Set NOTION_RESET_DAY for the exact day")

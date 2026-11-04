@@ -70,6 +70,19 @@ chmod +x "$PLUGINS/notion-credits.15m.sh"
 | `notion-credits.15m.sh remove-token` | Delete the saved token |
 | `notion-credits.15m.sh` | Print the menu once (handy for checking it works) |
 
+## Exact numbers from the Settings page (advanced)
+
+Settings → Notion AI shows your exact Standard and Select usage, but the public API does not.
+If you have your own way to read it, write it to `~/Library/Caches/notion-credits-usage.json`
+and the plugin uses it for both bars and the reset date while it is less than 36 hours old:
+
+```json
+{"fetched_at": 1793803211420,
+ "standard": {"used": 73.8, "limit": 1500},
+ "select": {"used": 0.5, "limit": 500},
+ "period_start_ms": 1792281600000, "period_end_ms": 1794960000000}
+```
+
 ## Questions
 
 **Is my token safe?**

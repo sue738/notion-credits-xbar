@@ -71,6 +71,19 @@ chmod +x "$PLUGINS/notion-credits.15m.sh"
 | `notion-credits.15m.sh remove-token` | 保存したトークンを消します |
 | `notion-credits.15m.sh` | メニューの中身を1回だけ表示します（動くかの確認に使えます） |
 
+## 設定画面の正確な数字を使う（上級者向け）
+
+設定 → Notion AI には Standard と Select の正確な使用量が出ますが、公開 API では取れません。
+自分で読み取る方法があれば、`~/Library/Caches/notion-credits-usage.json` に次の形で書いてください。
+36時間以内に書かれたものなら、2本のバーとリセット日にこの数字を使います。
+
+```json
+{"fetched_at": 1793803211420,
+ "standard": {"used": 73.8, "limit": 1500},
+ "select": {"used": 0.5, "limit": 500},
+ "period_start_ms": 1792281600000, "period_end_ms": 1794960000000}
+```
+
 ## よくある質問
 
 **トークンは安全？**
